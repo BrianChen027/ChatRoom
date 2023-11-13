@@ -24,6 +24,7 @@ public class ChatServer {
         private Socket socket;
         private PrintWriter out;
         private String currentRoomId;
+        private String userName;
 
         public ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
@@ -33,10 +34,11 @@ public class ChatServer {
         public void run() {
             try {
                 BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                userName = input.readLine(); // 讀取用戶名
+
                 String clientMessage;
 
                 while ((clientMessage = input.readLine()) != null) {
-                    // 分析命令：join <roomId>, leave, message <text>
                     String[] tokens = clientMessage.split(" ", 2);
                     String command = tokens[0];
 
@@ -48,7 +50,7 @@ public class ChatServer {
                             leaveRoom();
                             break;
                         case "message":
-                            broadcastMessage(tokens[1]);
+                            broadcastMessage(userName + ": " + tokens[1]);
                             break;
                         case "exit":
                             leaveRoom();
@@ -102,4 +104,3 @@ public class ChatServer {
         }
     }
 }
-

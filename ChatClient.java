@@ -12,6 +12,10 @@ public class ChatClient {
         BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         Scanner scanner = new Scanner(System.in);
 
+        System.out.print("Enter your username: ");
+        String userName = scanner.nextLine();
+        out.println(userName); // 發送用戶名到服務器
+
         new Thread(() -> {
             try {
                 String serverMessage;
@@ -36,4 +40,3 @@ public class ChatClient {
         scanner.close();
     }
 }
-
