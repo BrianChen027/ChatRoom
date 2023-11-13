@@ -15,4 +15,5 @@ their name will show before the message.
 
 Like this <br/>
 -> Alice: hello world <br/>
--> Bob: hello, Alice
+-> Bob: hello, Alice <br/>
+<img width="762" alt="截圖 2023-11-12 下午10 51 20" src="https://github.com/BrianChen027/ChatRoom/assets/97871497/aeef5c7e-805d-4769-a35f-c473b71886ca">
