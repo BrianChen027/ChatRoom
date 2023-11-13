@@ -16,6 +16,7 @@ public class ChatClient {
         String userName = scanner.nextLine();
         out.println(userName); // 發送用戶名到服務器
 
+        // 讀取來自服務器的信息
         new Thread(() -> {
             try {
                 String serverMessage;
@@ -27,6 +28,7 @@ public class ChatClient {
             }
         }).start();
 
+        // 處理用戶輸入
         while (scanner.hasNextLine()) {
             String userInput = scanner.nextLine();
             out.println(userInput);
