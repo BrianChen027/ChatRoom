@@ -21,3 +21,7 @@ Like this <br/>
 Version three: <br/>
 Add the help action and show the exist rooms feature <br/>
 <img width="978" alt="截圖 2023-11-13 上午3 29 39" src="https://github.com/BrianChen027/ChatRoom/assets/97871497/36667abb-633d-40ad-96f8-45459bea8868">
+
+Version Four: <br/>
+When there is empty room, no one join in, last for 5 minutes, this room will be decarded by the Server <br/>
+<img width="964" alt="截圖 2023-11-14 下午3 32 02" src="https://github.com/BrianChen027/ChatRoom/assets/97871497/8f8bc94c-a57a-45d0-87a1-3b411cd00da1">
