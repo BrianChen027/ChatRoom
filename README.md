@@ -30,4 +30,8 @@ Version Five: <br/>
 Fix the Room timer error, and add the username unique feature.
 <img width="1168" alt="截圖 2023-11-15 上午12 35 48" src="https://github.com/BrianChen027/ChatRoom/assets/97871497/bf7a26cc-a879-449b-b431-b34d4ca19bd1">
 
+Version Six: <br/>
+Allow the room to set password or no password.
+(Not yet implement)
+
 
