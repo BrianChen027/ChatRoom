@@ -7,38 +7,42 @@ public class ChatClient {
         String serverAddress = "localhost";
         int port = 1234;
 
-        Socket socket = new Socket(serverAddress, port);
-        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-        BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        Scanner scanner = new Scanner(System.in);
+        try (Socket socket = new Socket(serverAddress, port);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             Scanner scanner = new Scanner(System.in)) {
 
-        System.out.print("Enter your username: ");
-        String userName = scanner.nextLine();
-        out.println(userName); // 發送用戶名到服務器
-
-        // 讀取來自服務器的信息
-        new Thread(() -> {
-            try {
-                String serverMessage;
-                while ((serverMessage = input.readLine()) != null) {
-                    System.out.println(serverMessage);
+            // 创建一个线程来读取并显示服务器的消息
+            Thread responseThread = new Thread(() -> {
+                try {
+                    String serverMessage;
+                    while ((serverMessage = input.readLine()) != null) {
+                        System.out.println(serverMessage); // 打印服务器响应
+                    }
+                } catch (IOException e) {
+                    if (!socket.isClosed()) {
+                        System.out.println("Error reading from server: " + e.getMessage());
+                    }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }).start();
+            });
+            responseThread.start();
 
-        // 處理用戶輸入
-        while (scanner.hasNextLine()) {
-            String userInput = scanner.nextLine();
-            out.println(userInput);
+            // 主线程处理用户输入
+            System.out.print("Enter your username: ");
+            while (scanner.hasNextLine()) {
+                String userInput = scanner.nextLine();
+                out.println(userInput); // 发送用户输入到服务器
 
-            if (userInput.equalsIgnoreCase("exit")) {
-                break;
+                if ("exit".equalsIgnoreCase(userInput)) {
+                    break; // 如果输入 exit，则结束循环
+                }
             }
+            socket.close();
+            
+            responseThread.join(); // 等待响应线程结束
+
+        } catch (IOException | InterruptedException e) {
+            System.out.println("An error occurred: " + e.getMessage());
         }
-
-        socket.close();
-        scanner.close();
     }
 }
