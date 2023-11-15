@@ -34,4 +34,7 @@ Version Six: <br/>
 Allow the room to set password or no password.
 (Not yet implement)
 
-
+Version Seven: <br/>
+The Server side can see how many are there in the room: id
+-> Room 001: 3 / 5
+(Not yet implement)
