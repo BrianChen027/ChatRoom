@@ -2,11 +2,12 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ChatServer {
     private static final int MAX_CLIENTS = 5;
-    private static final long ROOM_LIFETIME = 10000; // 5分鐘 = 300000毫秒
-    private static Map<String, Set<ClientHandler>> chatRooms = new ConcurrentHashMap<>();
+    private static final long ROOM_LIFETIME = 180000; // 3分钟 = 180000毫秒
+    private static Map<String, ChatRoom> chatRooms = new ConcurrentHashMap<>();
     private static Map<String, ScheduledFuture<?>> roomTimers = new ConcurrentHashMap<>();
     private static Set<String> activeUsernames = new CopyOnWriteArraySet<>();
     private static ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -19,6 +20,16 @@ public class ChatServer {
         while (true) {
             Socket socket = serverSocket.accept();
             new Thread(new ClientHandler(socket)).start();
+        }
+    }
+
+    static class ChatRoom {
+        Set<ClientHandler> members;
+        String password;
+
+        ChatRoom() {
+            this.members = new CopyOnWriteArraySet<>();
+            this.password = null; // 默认没有密码
         }
     }
 
@@ -45,20 +56,19 @@ public class ChatServer {
                     } else {
                         out.println("Username is already taken.");
                     }
-                    sendMessage("Enter your username: ");
                 }
 
                 String clientMessage;
                 while ((clientMessage = input.readLine()) != null) {
-                    String[] tokens = clientMessage.split(" ", 2);
+                    String[] tokens = clientMessage.split(" ", 3);
                     String command = tokens[0];
 
                     switch (command) {
                         case "create":
-                            createRoom(tokens[1]);
+                            createRoom(tokens);
                             break;
                         case "join":
-                            joinRoom(tokens[1]);
+                            joinRoom(tokens);
                             break;
                         case "leave":
                             leaveRoom();
@@ -67,7 +77,7 @@ public class ChatServer {
                             broadcastMessage(userName + ": " + tokens[1]);
                             break;
                         case "show":
-                            if (tokens.length > 1 && tokens[1].equals("rooms")) {
+                            if (tokens.length > 1 && "rooms".equals(tokens[1])) {
                                 sendActiveRooms();
                             }
                             break;
@@ -102,37 +112,37 @@ public class ChatServer {
             }
         }
 
-        private void createRoom(String roomId) {
+        private void createRoom(String[] tokens) {
+            String roomId = tokens[1];
+            String password = tokens.length > 2 ? tokens[2] : null;
+
             if (!chatRooms.containsKey(roomId)) {
-                chatRooms.put(roomId, new CopyOnWriteArraySet<>());
-                // 设置定时器，5分钟后检查聊天室是否为空
-                ScheduledFuture<?> roomTimer = scheduler.schedule(() -> {
-                    if (chatRooms.getOrDefault(roomId, Collections.emptySet()).isEmpty()) {
-                        chatRooms.remove(roomId);
-                        roomTimers.remove(roomId);
-                        System.out.println("Room " + roomId + " was removed due to inactivity.");
-                    }
-                }, ROOM_LIFETIME, TimeUnit.MILLISECONDS);
-                roomTimers.put(roomId, roomTimer);
-                System.out.println("Created room: " + roomId);
+                ChatRoom newRoom = new ChatRoom();
+                newRoom.password = password;
+                chatRooms.put(roomId, newRoom);
+
+                System.out.println("Created room: " + roomId + (password != null ? " with password" : ""));
             } else {
                 System.out.println("Room already exists: " + roomId);
             }
         }
 
-        private void joinRoom(String roomId) {
-            if (chatRooms.containsKey(roomId)) {
-                Set<ClientHandler> room = chatRooms.get(roomId);
-                if (room.size() < MAX_CLIENTS) {
-                    leaveRoom();
-                    room.add(this);
-                    currentRoomId = roomId;
+        private void joinRoom(String[] tokens) {
+            String roomId = tokens[1];
+            String password = tokens.length > 2 ? tokens[2] : null;
 
-                    ScheduledFuture<?> roomTimer = roomTimers.get(roomId);
-                    if (roomTimer != null) {
-                        roomTimer.cancel(false);
-                        roomTimers.remove(roomId);
-                    }
+            if (chatRooms.containsKey(roomId)) {
+                ChatRoom room = chatRooms.get(roomId);
+
+                if (room.password != null && !room.password.equals(password)) {
+                    sendMessage("Password incorrect");
+                    return;
+                }
+
+                if (room.members.size() < MAX_CLIENTS) {
+                    leaveRoom();
+                    room.members.add(this);
+                    currentRoomId = roomId;
 
                     sendMessage("Joined room: " + roomId);
                     broadcastMessageToRoom(roomId, userName + " has joined the room.");
@@ -149,15 +159,16 @@ public class ChatServer {
             String roomIdToCheck = currentRoomId;
 
             if (roomIdToCheck != null && chatRooms.containsKey(roomIdToCheck)) {
-                Set<ClientHandler> room = chatRooms.get(roomIdToCheck);
-                room.remove(this);
+                ChatRoom room = chatRooms.get(roomIdToCheck);
+                room.members.remove(this);
                 broadcastMessageToRoom(roomIdToCheck, userName + " has left the room.");
                 System.out.println(userName + " has left room: " + roomIdToCheck);
 
-                if (room.isEmpty()) {
+                if (room.members.isEmpty()) {
                     System.out.println("Room " + roomIdToCheck + " is empty");
                     ScheduledFuture<?> roomTimer = scheduler.schedule(() -> {
-                        if (chatRooms.getOrDefault(roomIdToCheck, Collections.emptySet()).isEmpty()) {
+                        ChatRoom checkRoom = chatRooms.getOrDefault(roomIdToCheck, new ChatRoom());
+                        if (checkRoom.members.isEmpty()) {
                             chatRooms.remove(roomIdToCheck);
                             roomTimers.remove(roomIdToCheck);
                             System.out.println("Room " + roomIdToCheck + " was removed due to inactivity.");
@@ -170,31 +181,9 @@ public class ChatServer {
             }
         }
 
-        
-        // private void leaveRoom() {
-        //     if (currentRoomId != null && chatRooms.containsKey(currentRoomId)) {
-        //         Set<ClientHandler> room = chatRooms.get(currentRoomId);
-        //         room.remove(this);
-        //         broadcastMessageToRoom(currentRoomId, userName + " has left the room.");
-        //         System.out.println(userName + " has left room: " + currentRoomId);
-        //         if (room.isEmpty()) {
-        //             System.out.println("Room " + currentRoomId + " is empty");
-        //             ScheduledFuture<?> roomTimer = scheduler.schedule(() -> {
-        //                 if (chatRooms.getOrDefault(currentRoomId, Collections.emptySet()).isEmpty()) {
-        //                     chatRooms.remove(currentRoomId);
-        //                     roomTimers.remove(currentRoomId);
-        //                     System.out.println("Room " + currentRoomId + " was removed due to inactivity.");
-        //                 }
-        //             }, ROOM_LIFETIME, TimeUnit.MILLISECONDS);
-        //             roomTimers.put(currentRoomId, roomTimer);
-        //         }
-        //         currentRoomId = null;
-        //     }
-        // }
-
         private void broadcastMessageToRoom(String roomId, String message) {
             if (chatRooms.containsKey(roomId)) {
-                for (ClientHandler client : chatRooms.get(roomId)) {
+                for (ClientHandler client : chatRooms.get(roomId).members) {
                     client.sendMessage(message);
                 }
             }
@@ -202,7 +191,7 @@ public class ChatServer {
 
         private void broadcastMessage(String message) {
             if (currentRoomId != null && chatRooms.containsKey(currentRoomId)) {
-                for (ClientHandler client : chatRooms.get(currentRoomId)) {
+                for (ClientHandler client : chatRooms.get(currentRoomId).members) {
                     if (client != this) {
                         client.sendMessage(message);
                     }
@@ -221,9 +210,9 @@ public class ChatServer {
 
         private void sendAvailableActions() {
             String actions = "Available actions:\n"
-                           + " - join <roomName>: Join a chat room\n"
+                           + " - join <roomName> [password]: Join a chat room\n"
                            + " - leave: Leave the current chat room\n"
-                           + " - create <roomName>: Create a new chat room\n"
+                           + " - create <roomName> [password]: Create a new chat room\n"
                            + " - message <message>: Send a message to the current chat room\n"
                            + " - show rooms: Show list of active chat rooms\n"
                            + " - action/help: Show this help message\n"
@@ -233,9 +222,6 @@ public class ChatServer {
 
         public void sendMessage(String message) {
             out.println(message);
-        }
-        public void sendMessageNor(String message) {
-            out.print(message);
         }
     }
 }
