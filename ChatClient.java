@@ -3,6 +3,8 @@ import java.net.*;
 import java.util.Scanner;
 
 public class ChatClient {
+    private static String attemptingRoomId = "";
+
     public static void main(String[] args) throws IOException {
         String serverAddress = "localhost";
         int port = 1234;
@@ -12,12 +14,18 @@ public class ChatClient {
              BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              Scanner scanner = new Scanner(System.in)) {
 
-            // 创建一个线程来读取并显示服务器的消息
             Thread responseThread = new Thread(() -> {
                 try {
                     String serverMessage;
                     while ((serverMessage = input.readLine()) != null) {
-                        System.out.println(serverMessage); // 打印服务器响应
+                        System.out.println(serverMessage);
+                        
+                        if (serverMessage.startsWith("Please Enter the password for room")) {
+                            // 在此线程中等待用户输入密码
+                            System.out.print("Enter password: ");
+                            String password = scanner.nextLine();
+                            out.println("join " + attemptingRoomId + " " + password);
+                        }
                     }
                 } catch (IOException e) {
                     if (!socket.isClosed()) {
@@ -27,21 +35,24 @@ public class ChatClient {
             });
             responseThread.start();
 
-            // 主线程处理用户输入
-            System.out.print("Enter your username: ");
+            // 显示用户名提示
+            System.out.print("Enter the Username: ");
+            attemptingRoomId = scanner.nextLine();
+            out.println(attemptingRoomId);
+
             while (scanner.hasNextLine()) {
                 String userInput = scanner.nextLine();
-                out.println(userInput); // 发送用户输入到服务器
+                String[] tokens = userInput.split(" ", 3);
+                if ("join".equals(tokens[0]) && tokens.length > 1) {
+                    attemptingRoomId = tokens[1];
+                }
+                out.println(userInput);
 
                 if ("exit".equalsIgnoreCase(userInput)) {
-                    break; // 如果输入 exit，则结束循环
+                    break;
                 }
             }
-            socket.close();
-            
-            responseThread.join(); // 等待响应线程结束
-
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             System.out.println("An error occurred: " + e.getMessage());
         }
     }

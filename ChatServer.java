@@ -121,35 +121,42 @@ public class ChatServer {
                 newRoom.password = password;
                 chatRooms.put(roomId, newRoom);
 
+                // 设置计时器，检查房间是否空闲
+                ScheduledFuture<?> roomTimer = scheduler.schedule(() -> {
+                    ChatRoom room = chatRooms.get(roomId);
+                    if (room != null && room.members.isEmpty()) {
+                        chatRooms.remove(roomId);
+                        roomTimers.remove(roomId);
+                        System.out.println("Room " + roomId + " was removed due to inactivity.");
+                    }
+                }, ROOM_LIFETIME, TimeUnit.MILLISECONDS);
+
+                roomTimers.put(roomId, roomTimer);
                 System.out.println("Created room: " + roomId + (password != null ? " with password" : ""));
             } else {
-                System.out.println("Room already exists: " + roomId);
+                sendMessage("Room already exists: " + roomId);
+                // System.out.println("Room already exists: " + roomId);
             }
         }
 
+
         private void joinRoom(String[] tokens) {
             String roomId = tokens[1];
-            String password = tokens.length > 2 ? tokens[2] : null;
 
             if (chatRooms.containsKey(roomId)) {
                 ChatRoom room = chatRooms.get(roomId);
 
+                if (room.password != null && !room.password.isEmpty() && tokens.length == 2) {
+                    sendMessage("Please Enter the password for room " + roomId);
+                    return; // 等待客户端发送密码
+                }
+
+                String password = tokens.length > 2 ? tokens[2] : null;
                 if (room.password != null && !room.password.equals(password)) {
                     sendMessage("Password incorrect");
                     return;
                 }
 
-                if (room.members.size() < MAX_CLIENTS) {
-                    leaveRoom();
-                    room.members.add(this);
-                    currentRoomId = roomId;
-
-                    sendMessage("Joined room: " + roomId);
-                    broadcastMessageToRoom(roomId, userName + " has joined the room.");
-                    System.out.println(userName + " has joined room: " + roomId);
-                } else {
-                    sendMessage("Room is full.");
-                }
             } else {
                 sendMessage("Room does not exist: " + roomId);
             }
@@ -165,21 +172,23 @@ public class ChatServer {
                 System.out.println(userName + " has left room: " + roomIdToCheck);
 
                 if (room.members.isEmpty()) {
-                    System.out.println("Room " + roomIdToCheck + " is empty");
+                    // 重新设置计时器
                     ScheduledFuture<?> roomTimer = scheduler.schedule(() -> {
-                        ChatRoom checkRoom = chatRooms.getOrDefault(roomIdToCheck, new ChatRoom());
-                        if (checkRoom.members.isEmpty()) {
+                        ChatRoom checkRoom = chatRooms.get(roomIdToCheck);
+                        if (checkRoom != null && checkRoom.members.isEmpty()) {
                             chatRooms.remove(roomIdToCheck);
                             roomTimers.remove(roomIdToCheck);
                             System.out.println("Room " + roomIdToCheck + " was removed due to inactivity.");
                         }
                     }, ROOM_LIFETIME, TimeUnit.MILLISECONDS);
+
                     roomTimers.put(roomIdToCheck, roomTimer);
                 }
 
                 currentRoomId = null;
             }
         }
+
 
         private void broadcastMessageToRoom(String roomId, String message) {
             if (chatRooms.containsKey(roomId)) {
@@ -203,8 +212,14 @@ public class ChatServer {
             if (chatRooms.isEmpty()) {
                 sendMessage("No active chat rooms.");
             } else {
-                String activeRooms = "Active chat rooms: " + String.join(", ", chatRooms.keySet());
-                sendMessage(activeRooms);
+                StringBuilder roomsInfo = new StringBuilder("Active chat rooms:");
+                for (Map.Entry<String, ChatRoom> entry : chatRooms.entrySet()) {
+                    String roomId = entry.getKey();
+                    ChatRoom room = entry.getValue();
+                    roomsInfo.append("\n - ").append(roomId)
+                            .append(room.password == null || room.password.isEmpty() ? " (No password)" : " (Password protected)");
+                }
+                sendMessage(roomsInfo.toString());
             }
         }
 
